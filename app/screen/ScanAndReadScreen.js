@@ -3,7 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 
 export default function NFCScannerScreen() {
   const [uid, setUid] = useState(null);
-  const ESP32_IP = 'http://192.168.1.76';
+  const ESP32_IP = 'http://192.168.1.76'; // change this to your ESP32 IP
 
   useEffect(() => {
     const interval = setInterval(() => {
