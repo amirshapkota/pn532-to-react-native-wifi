@@ -1,42 +1,60 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, TextInput, Button, Alert, StyleSheet } from 'react-native';
 
-export default function NFCScannerScreen() {
-  const [uid, setUid] = useState(null);
-  const ESP32_IP = 'http://192.168.1.76'; // change this to your ESP32 IP
+export default function WifiSetupScreen() {
+  const [ssid, setSsid] = useState('');
+  const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      fetch(`${ESP32_IP}/uid`)
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.uid && data.uid !== uid) {
-            setUid(data.uid);
-            console.log("Scanned UID:", data.uid);
-          }
-        })
-        .catch((err) => console.warn("Fetch failed:", err));
-    }, 2000);
+  const submitCredentials = async () => {
+    if (!ssid || !password) {
+      Alert.alert('Error', 'Please enter both SSID and password');
+      return;
+    }
+    setLoading(true);
+    try {
+      const response = await fetch('http://192.168.4.1/wifi-setup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ssid, password }),
+      });
 
-    return () => clearInterval(interval);
-  }, [uid]);
+      if (response.ok) {
+        Alert.alert('Success', 'Credentials sent! ESP32 is connecting...');
+      } else {
+        Alert.alert('Error', 'Failed to send credentials');
+      }
+    } catch (error) {
+      Alert.alert('Error', 'Could not connect to ESP32 SoftAP');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Scanned NFC UID:</Text>
-      <Text style={styles.uid}>{uid || 'Waiting for card...'}</Text>
+      <Text style={styles.title}>Setup Wi-Fi for ESP32</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Wi-Fi SSID"
+        value={ssid}
+        onChangeText={setSsid}
+        autoCapitalize="none"
+      />
+      <TextInput
+        style={styles.input}
+        placeholder="Wi-Fi Password"
+        value={password}
+        onChangeText={setPassword}
+        secureTextEntry
+      />
+      <Button title={loading ? 'Sending...' : 'Send Credentials'} onPress={submitCredentials} disabled={loading} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff',
-  },
-  title: {
-    fontSize: 24, fontWeight: 'bold', marginBottom: 20,
-  },
-  uid: {
-    fontSize: 20, color: '#333',
-  },
+  container: { flex: 1, justifyContent: 'center', padding: 20 },
+  title: { fontSize: 22, marginBottom: 20, textAlign: 'center' },
+  input: { borderWidth: 1, borderColor: '#ccc', padding: 10, marginBottom: 15, borderRadius: 5 },
 });
