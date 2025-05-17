@@ -1,12 +1,16 @@
 import { StatusBar } from 'expo-status-bar';
 import { StyleSheet, Text, View } from 'react-native';
-import ScanAndReadScreen from './app/screen/ScanAndReadScreen';
+import RfidScreen from './app/screen/RfidScreen';
+import { NavigationContainer } from '@react-navigation/native';
 
 export default function App() {
   return (
-    <View style={styles.container}>
-      <ScanAndReadScreen />
-    </View>
+    <NavigationContainer>
+      <View style={styles.container}>
+        <StatusBar style="auto" />
+        <RfidScreen />
+      </View>
+      </NavigationContainer>
   );
 }
 
