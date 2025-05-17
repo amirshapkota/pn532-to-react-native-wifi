@@ -327,14 +327,12 @@ void checkForRFID() {
     
     newUID.toUpperCase();
     
-    if (newUID != lastUID) {
-      // Different card from last time
-      lastUID = newUID;
-      lastScanTime = millis();
-      
-      Serial.print("Card detected with UID: ");
-      Serial.println(lastUID);
-    }
+    // Update UID and timestamp regardless if it's the same card or different
+    lastUID = newUID;
+    lastScanTime = millis();
+    
+    Serial.print("Card detected with UID: ");
+    Serial.println(lastUID);
   }
 }
 

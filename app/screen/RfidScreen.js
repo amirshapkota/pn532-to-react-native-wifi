@@ -309,76 +309,90 @@ const RfidScreen = () => {
   };
   
   // Start polling for RFID scans
-  const startRFIDPolling = (ip) => {
-    // Clear any existing interval
-    if (window.rfidPollingInterval) {
-      clearInterval(window.rfidPollingInterval);
-    }
-    
-    console.log('Starting RFID polling at IP:', ip);
-    
-    // Set up a new polling interval
-    window.rfidPollingInterval = setInterval(async () => {
-      try {
-        const response = await fetch(`http://${ip}/read-rfid`);
+  // Start polling for RFID scans
+const startRFIDPolling = (ip) => {
+  // Clear any existing interval
+  if (window.rfidPollingInterval) {
+    clearInterval(window.rfidPollingInterval);
+  }
+  
+  console.log('Starting RFID polling at IP:', ip);
+  
+  // Store the last processed data to avoid duplicate processing
+  let lastProcessedUID = "";
+  let lastProcessedTimestamp = 0;
+  
+  // Set up a new polling interval
+  window.rfidPollingInterval = setInterval(async () => {
+    try {
+      const response = await fetch(`http://${ip}/read-rfid`);
+      
+      if (response.ok) {
+        const data = await response.json();
+        console.log('RFID data received:', data);
         
-        if (response.ok) {
-          const data = await response.json();
+        // Only process if:
+        // 1. We have a valid UID
+        // 2. This is different from the last card we processed (either by UID or timestamp)
+        if (data.uid && data.uid.length > 0 && 
+            (data.uid !== lastProcessedUID || data.timestamp !== lastProcessedTimestamp)) {
           
-          // If we have a UID and it's different from the last one we processed
-          if (data.uid && data.uid.length > 0 && (!lastScannedCard || data.uid !== lastScannedCard.uid)) {
-            console.log('New RFID card detected:', data.uid);
-            
-            // Create a card object with timestamp
-            const newCard = {
-              uid: data.uid,
-              timestamp: new Date().toLocaleTimeString(),
-              id: Math.random().toString(36).substring(2, 10), // Random ID for FlatList
-            };
-            
-            // Update state
-            setLastScannedCard(newCard);
-            setLastActive('just now');
-            
-            // Add to history (only keep last 20)
-            setScanHistory(prevHistory => [
-              newCard,
-              ...prevHistory.slice(0, 19)
-            ]);
-            
-            // Trigger animation and vibration
-            Animated.sequence([
-              Animated.timing(cardAnimation, {
-                toValue: 1,
-                duration: 300,
-                useNativeDriver: true,
-              }),
-              Animated.timing(cardAnimation, {
-                toValue: 0,
-                duration: 300,
-                delay: 500,
-                useNativeDriver: true,
-              })
-            ]).start();
-            
-            // Vibrate the device
-            Vibration.vibrate(200);
-          }
-        }
-      } catch (error) {
-        console.error('RFID polling error:', error);
-        
-        // If we get an error, check if the scanner is still available
-        const stillConnected = await checkScannerStatus(ip);
-        
-        if (!stillConnected) {
-          // Stop polling if scanner is not available
-          clearInterval(window.rfidPollingInterval);
-          setScannerConnected(false);
+          console.log('New RFID card detected:', data.uid);
+          
+          // Update our tracking variables
+          lastProcessedUID = data.uid;
+          lastProcessedTimestamp = data.timestamp;
+          
+          // Create a card object with timestamp
+          const newCard = {
+            uid: data.uid,
+            timestamp: new Date().toLocaleTimeString(),
+            id: Math.random().toString(36).substring(2, 10), // Random ID for FlatList
+          };
+          
+          // Update state
+          setLastScannedCard(newCard);
+          setLastActive('just now');
+          
+          // Add to history (only keep last 20)
+          setScanHistory(prevHistory => [
+            newCard,
+            ...prevHistory.slice(0, 19)
+          ]);
+          
+          // Trigger animation and vibration
+          Animated.sequence([
+            Animated.timing(cardAnimation, {
+              toValue: 1,
+              duration: 300,
+              useNativeDriver: true,
+            }),
+            Animated.timing(cardAnimation, {
+              toValue: 0,
+              duration: 300,
+              delay: 500,
+              useNativeDriver: true,
+            })
+          ]).start();
+          
+          // Vibrate the device
+          Vibration.vibrate(200);
         }
       }
-    }, 1000); // Poll every second
-  };
+    } catch (error) {
+      console.error('RFID polling error:', error);
+      
+      // If we get an error, check if the scanner is still available
+      const stillConnected = await checkScannerStatus(ip);
+      
+      if (!stillConnected) {
+        // Stop polling if scanner is not available
+        clearInterval(window.rfidPollingInterval);
+        setScannerConnected(false);
+      }
+    }
+  }, 1000); // Poll every second
+};
   
   // Function to send WiFi credentials to ESP32
   const sendWifiCredentials = async () => {
