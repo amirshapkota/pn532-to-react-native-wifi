@@ -39,6 +39,7 @@ unsigned long lastScanTime = 0;
 String previousUID = "";  // Track the previous card
 unsigned long previousScanTime = 0;  // When the previous card was detected
 const unsigned long CARD_TIMEOUT = 5000;  // 5 seconds timeout
+bool uidConsumed = false;  // Flag to track if UID has been consumed by client
 
 // Function to print WiFi status for debugging
 void printWiFiStatus(int status) {
@@ -213,8 +214,20 @@ void setupServerEndpoints() {
   // HTTP GET /read-rfid endpoint to get the last scanned RFID card
   server.on("/read-rfid", HTTP_GET, [](AsyncWebServerRequest *request) {
     StaticJsonDocument<200> doc;
-    doc["uid"] = lastUID;
-    doc["timestamp"] = lastScanTime;
+    
+    // Only return UID if it hasn't been consumed and is valid
+    if (!uidConsumed && lastUID.length() > 0) {
+      doc["uid"] = lastUID;
+      doc["timestamp"] = lastScanTime;
+      uidConsumed = true;  // Mark as consumed
+      Serial.println("UID consumed by client: " + lastUID);
+    } else {
+      doc["uid"] = "";
+      doc["timestamp"] = 0;
+      if (uidConsumed && lastUID.length() > 0) {
+        Serial.println("UID already consumed: " + lastUID);
+      }
+    }
     
     String response;
     serializeJson(doc, response);
@@ -234,6 +247,18 @@ void setupServerEndpoints() {
     
     // Restart the ESP32
     ESP.restart();
+  });
+
+  // HTTP GET /clear-rfid endpoint to manually clear the last scanned card (useful for testing)
+  server.on("/clear-rfid", HTTP_GET, [](AsyncWebServerRequest *request) {
+    lastUID = "";
+    lastScanTime = 0;
+    previousUID = "";
+    previousScanTime = 0;
+    uidConsumed = false;
+    
+    Serial.println("RFID data cleared manually");
+    request->send(200, "application/json", "{\"status\":\"cleared\"}");
   });
 
   // Start the server
@@ -312,7 +337,7 @@ void connectToWiFi() {
   shouldAttemptConnection = false;
 }
 
-// Function to read RFID card with duplicate detection
+// Function to read RFID card with duplicate detection and consumption tracking
 void checkForRFID() {
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                         // Length of the UID
@@ -359,10 +384,16 @@ void checkForRFID() {
       lastScanTime = currentTime;
       previousUID = newUID;
       previousScanTime = currentTime;
+      uidConsumed = false;  // Reset consumed flag for new detection
       
       Serial.print("Card registered with UID: ");
-      Serial.println(lastUID);
+      Serial.print(lastUID);
+      Serial.print(" at timestamp: ");
+      Serial.println(lastScanTime);
     }
+  } else {
+    // No card detected - this helps with detecting card removal
+    // We don't need to do anything special here since we're using timeout-based detection
   }
 }
 
@@ -371,6 +402,7 @@ void setup() {
   delay(1000); // Give time for serial to initialize
   
   Serial.println("\n\n=== ESP32 RFID Reader Starting ===");
+  Serial.println("Version: 2.0 with Consumption Tracking");
   
   // Initialize EEPROM
   EEPROM.begin(EEPROM_SIZE);
@@ -428,6 +460,12 @@ void setup() {
   setupServerEndpoints();
   
   Serial.println("ESP32 setup complete");
+  Serial.println("Available endpoints:");
+  Serial.println("  GET /status - Check device status");
+  Serial.println("  GET /read-rfid - Read last scanned RFID card");
+  Serial.println("  GET /clear-rfid - Clear RFID data");
+  Serial.println("  GET /reset - Reset WiFi settings");
+  Serial.println("  POST /wifi-setup - Configure WiFi");
 }
 
 void loop() {
@@ -476,6 +514,18 @@ void loop() {
         // Keep AP mode running for setup
       }
     }
+  }
+  
+  // Print status every 30 seconds for debugging
+  static unsigned long lastStatusPrint = 0;
+  if (millis() - lastStatusPrint > 30000) {
+    lastStatusPrint = millis();
+    Serial.print("Status - WiFi: ");
+    Serial.print(isConnectedToWiFi ? "Connected" : "Disconnected");
+    Serial.print(", Last UID: ");
+    Serial.print(lastUID.length() > 0 ? lastUID : "None");
+    Serial.print(", Consumed: ");
+    Serial.println(uidConsumed ? "Yes" : "No");
   }
   
   // Small delay to prevent watchdog issues
