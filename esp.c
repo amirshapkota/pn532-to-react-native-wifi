@@ -36,6 +36,9 @@ String storedPassword = "";
 // For RFID reading
 String lastUID = "";
 unsigned long lastScanTime = 0;
+String previousUID = "";  // Track the previous card
+unsigned long previousScanTime = 0;  // When the previous card was detected
+const unsigned long CARD_TIMEOUT = 5000;  // 5 seconds timeout
 
 // Function to print WiFi status for debugging
 void printWiFiStatus(int status) {
@@ -309,7 +312,7 @@ void connectToWiFi() {
   shouldAttemptConnection = false;
 }
 
-// Function to read RFID card
+// Function to read RFID card with duplicate detection
 void checkForRFID() {
   uint8_t uid[] = { 0, 0, 0, 0, 0, 0, 0 };  // Buffer to store the returned UID
   uint8_t uidLength;                         // Length of the UID
@@ -326,13 +329,40 @@ void checkForRFID() {
     }
     
     newUID.toUpperCase();
+    unsigned long currentTime = millis();
     
-    // Update UID and timestamp regardless if it's the same card or different
-    lastUID = newUID;
-    lastScanTime = millis();
+    // Check if this is a new card or enough time has passed since the last detection
+    bool shouldUpdate = false;
     
-    Serial.print("Card detected with UID: ");
-    Serial.println(lastUID);
+    if (newUID != previousUID) {
+      // This is a different card
+      Serial.print("New card detected: ");
+      Serial.println(newUID);
+      shouldUpdate = true;
+    } else if ((currentTime - previousScanTime) > CARD_TIMEOUT) {
+      // Same card but timeout has passed
+      Serial.print("Same card re-detected after timeout: ");
+      Serial.println(newUID);
+      shouldUpdate = true;
+    } else {
+      // Same card within timeout period - ignore
+      Serial.print("Ignoring duplicate card detection: ");
+      Serial.print(newUID);
+      Serial.print(" (last seen ");
+      Serial.print((currentTime - previousScanTime) / 1000);
+      Serial.println(" seconds ago)");
+    }
+    
+    if (shouldUpdate) {
+      // Update the last detected card info
+      lastUID = newUID;
+      lastScanTime = currentTime;
+      previousUID = newUID;
+      previousScanTime = currentTime;
+      
+      Serial.print("Card registered with UID: ");
+      Serial.println(lastUID);
+    }
   }
 }
 
